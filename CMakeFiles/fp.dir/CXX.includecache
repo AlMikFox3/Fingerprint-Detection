@@ -1277,6 +1277,12 @@ string
 -
 sstream
 -
+stdlib.h
+-
+cstdlib
+-
+unistd.h
+-
 
 /home/almikfox/opencv_contrib/modules/xfeatures2d/include/opencv2/xfeatures2d.hpp
 opencv2/features2d.hpp

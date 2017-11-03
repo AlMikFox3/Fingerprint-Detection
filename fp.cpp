@@ -3,7 +3,11 @@
 #include <fstream>
 #include <string>
 #include <sstream>
-// Works for 1,2,4,5,6,7,8
+#include <stdlib.h>
+#include <cstdlib>
+#include <unistd.h>
+
+// Works for 1,2,4,5,6,7,8,9
 namespace patch
 {
     template < typename T > std::string to_string( const T& n )
@@ -18,7 +22,7 @@ using namespace std;
 using namespace cv;
 using namespace cv::xfeatures2d;
 
-// Perform a single thinning iteration, which is repeated until the skeletization is finalized
+// Thinning iteration till Skeletization
 void thinningIteration(Mat& im, int iter)
 {
     Mat marker = Mat::zeros(im.size(), CV_8UC1);
@@ -51,10 +55,10 @@ void thinningIteration(Mat& im, int iter)
     im &= ~marker;
 }
 
-// Function for thinning any given binary image within the range of 0-255. If not you should first make sure that your image has this range preset and configured!
+// Thinning Function
 void thinning(Mat& im)
 {
-	 // Enforce the range tob e in between 0 - 255
+	 // Enforce the range to be in between 0 - 255
     im /= 255;
 
     Mat prev = Mat::zeros(im.size(), CV_8UC1);
@@ -73,8 +77,8 @@ void thinning(Mat& im)
 
 int main( int argc, const char** argv )
 {
-    // This will be our test fingerprint
-    Mat input = imread("./data/fingerprints1/108_11.tif", IMREAD_GRAYSCALE);
+    // Test Fingerprint
+    Mat input = imread("./data/fingerprints1/102_11.tif", IMREAD_GRAYSCALE);
 
     // Binarize the image, through local thresholding
     Mat input_binary;
@@ -84,7 +88,7 @@ int main( int argc, const char** argv )
     Mat container(input.rows, input.cols*2, CV_8UC1);
     input.copyTo( container( Rect(0, 0, input.cols, input.rows) ) );
     input_binary.copyTo( container( Rect(input.cols, 0, input.cols, input.rows) ) );
-    imshow("input versus binary", container); waitKey(0);
+    imshow("input versus binary", container); waitKey(5000);
 
     // Now apply the thinning algorithm
     Mat input_thinned = input_binary.clone();
@@ -93,19 +97,19 @@ int main( int argc, const char** argv )
     // Compare both
     input_binary.copyTo( container( Rect(0, 0, input.cols, input.rows) ) );
     input_thinned.copyTo( container( Rect(input.cols, 0, input.cols, input.rows) ) );
-    imshow("binary versus thinned", container); waitKey(0);
+    imshow("binary versus thinned", container); waitKey(5000);
 
-    // Now lets detect the strong minutiae using Haris corner detection
+    // detecting the strong minutiae using Haris corner detection
     Mat harris_corners, harris_normalised;
     harris_corners = Mat::zeros(input_thinned.size(), CV_32FC1);
     cornerHarris(input_thinned, harris_corners, 2, 3, 0.04, BORDER_DEFAULT);
     normalize(harris_corners, harris_normalised, 0, 255, NORM_MINMAX, CV_32FC1, Mat());
 
-    // Select the strongest corners that you want
+    // Selecting the strongest corners
     int threshold_harris = 125;
     vector<KeyPoint> keypoints;
 
-    // Make a color clone for visualisation purposes
+    // Making a color clone
     Mat rescaled;
     convertScaleAbs(harris_normalised, rescaled);
     Mat harris_c(rescaled.rows, rescaled.cols, CV_8UC3);
@@ -115,14 +119,13 @@ int main( int argc, const char** argv )
     for(int x=0; x<harris_normalised.cols; x++){
        for(int y=0; y<harris_normalised.rows; y++){
           if ( (int)harris_normalised.at<float>(y, x) > threshold_harris ){
-             // Draw or store the keypoint location here, just like you decide. In our case we will store the location of the keypoint
              circle(harris_c, Point(x, y), 5, Scalar(0,255,0), 1);
              circle(harris_c, Point(x, y), 1, Scalar(0,0,255), 1);
              keypoints.push_back( KeyPoint (x, y, 1) );
           }
        }
     }
-    imshow("temp", harris_c); waitKey(0);
+    imshow("minutiae", harris_c); waitKey(5000);
 
     // Compare both
     Mat ccontainer(input.rows, input.cols*2, CV_8UC3);
@@ -130,7 +133,7 @@ int main( int argc, const char** argv )
     cvtColor(input_thinned_c, input_thinned_c, CV_GRAY2BGR);
     input_thinned_c.copyTo( ccontainer( Rect(0, 0, input.cols, input.rows) ) );
     harris_c.copyTo( ccontainer( Rect(input.cols, 0, input.cols, input.rows) ) );
-    imshow("thinned versus selected corners", ccontainer); waitKey(0);
+    imshow("thinned versus selected corners", ccontainer); waitKey(5000);
 
     // Calculate the ORB descriptor based on the keypoint
     Ptr<Feature2D> orb_descriptor = ORB::create();
@@ -138,9 +141,8 @@ int main( int argc, const char** argv )
     orb_descriptor->compute(input_thinned, keypoints, descriptors);
     int smallest = 99999;
     string p = "soln";
-    // You can now store the descriptor in a matrix and calculate all for each image.
-    // Since we just got the hamming distance brute force matching left, we will take another image and calculate the descriptors also.
-    // Removed as much overburden comments as you can find them above
+    //cout<< "Matching";
+    // Brute forcing the fingerprint database for a match
     for(int i=1; i<=9; i++){
         for(int j=2; j<=8; j++){
             string dir = "./data/fingerprints1/10";
@@ -177,12 +179,14 @@ int main( int argc, const char** argv )
                     }
                 }
             }
-            imshow("temp2", harris_c2); waitKey(0);
+            imshow("Matching...", harris_c2); waitKey(500);
+            
+            //usleep(3000);
             Mat descriptors2;
             orb_descriptor->compute(input_thinned2, keypoints2, descriptors2);
 
-            // Now lets match both descriptors
-            // Create the matcher interface
+            // Matching both descriptors
+            // Creating the matcher interface
             Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
             vector< DMatch > matches;
             matcher->match(descriptors, descriptors2, matches);
@@ -202,8 +206,8 @@ int main( int argc, const char** argv )
 
         }
     }
-    cerr << endl << "Current matching score = " << smallest << endl;
-    cout<<"Matched with person "<<p<<endl;
+    //cerr << endl << "Current matching score = " << smallest << endl;
+    cout<<"Matched with person "<<p<<" with matching score = "<<smallest<<endl;
 
     return 0;
 }
